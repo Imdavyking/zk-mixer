@@ -14,4 +14,10 @@
 ### Private inputs
 - Secret
 - Nullifier
-- Merkle proof ()
+- Merkle proof (intermediate nodes required to reconstruct the tree)
+- Boolean to say whether the node has an even node
+
+### Public Inputs
+- proposed root
+- nullifier hash
+

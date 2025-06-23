@@ -5,7 +5,9 @@ import {Poseidon2, Field} from "@poseidon/src/Poseidon2.sol";
 contract IncrementalMerkleTree {
     uint32 public immutable i_depth; // Maximum depth of the tree
     Poseidon2 public immutable i_hasher; // Hasher contract to compute hashes
-    bytes32 public s_root;
+    mapping(uint256 => bytes32) public s_roots;
+    uint32 public constant ROOT_HISTORY_SIZE = 30; // Number of historical roots to keep
+    uint32 public s_currentRootIndex; // Current root index in the history
     uint32 public s_nextLeafIndex; // Next leaf index to be inserted
     mapping(uint32 => bytes32) public s_cachedSubtrees; // Cached subtrees for efficiency
 
@@ -25,7 +27,7 @@ contract IncrementalMerkleTree {
         i_hasher = _hasher;
         // initialize the tree with zeros (precompute all the zero subtrees)
         // store the initial root in storage
-        s_root = zeros(_depth);
+        s_roots[0] = zeros(_depth);
     }
 
     function _insert(bytes32 _leaf) internal returns (uint32) {
@@ -54,14 +56,31 @@ contract IncrementalMerkleTree {
                 left = s_cachedSubtrees[i];
                 right = currentHash;
             }
-            bytes32 currentHash = Field.toBytes32(
+            currentHash = Field.toBytes32(
                 i_hasher.hash_2(Field.toField(left), Field.toField(right))
             );
             currentIndex /= 2;
         }
-        s_root = currentHash;
+        uint32 newRootIndex = (s_currentRootIndex + 1) % ROOT_HISTORY_SIZE;
+        s_currentRootIndex = newRootIndex;
+        s_roots[newRootIndex] = currentHash;
         s_nextLeafIndex = _nextLeafIndex + 1;
         return _nextLeafIndex;
+    }
+
+    function isKnownRoot(bytes32 _root) public view returns (bool) {
+        if (_root == bytes32(0)) {
+            return false; // zero root is not a valid root
+        }
+        uint32 _currentRootIndex = s_currentRootIndex;
+        uint32 i = _currentRootIndex;
+        do {
+            if (s_roots[i] == _root) {
+                return true;
+            }
+            i = (i + 1) % ROOT_HISTORY_SIZE;
+        } while (i != _currentRootIndex);
+        return false;
     }
 
     function zeros(uint256 i) public pure returns (bytes32) {
